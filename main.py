@@ -1,137 +1,248 @@
 import pygame
 import sys
-import math
+import config as cfg
+from gameobjects import *
 
-# Инициализация Pygame
-pygame.init()
+class Game:
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
+        pygame.display.set_caption("Пожалуйста, ничего не трогайте")
+        self.clock = pygame.time.Clock()
 
-# Настройки окна
-WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Пожалуйста, ничего не трогайте")
+        self.regular_font = pygame.font.Font(None, 24)
+        self.large_font = pygame.font.Font(None, 48)
 
-# Цветовая палитра
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-GRAY = (100, 100, 100)
-BROWN = (139, 69, 19)  # Для декоративных объектов
+        # Инициализация объектов игры
+        self.background = Background()
+        self.monitor = MonitorSprite(pygame.Rect(*cfg.MONITOR_POS, *cfg.MONITOR_SIZE), self.regular_font, self.large_font)
+        self.button = ButtonSprite((400, 500), (80, 80))
+        self.lever = LeverSprite((500, 500), (20, 60))
+        self.interactive_objects = [self.button, self.lever, self.monitor]
 
-# Обновленные зоны экрана
-MONITOR_RECT = pygame.Rect(250, 50, 300, 200)  # Монитор 300x200
-TABLE_RECT = pygame.Rect(0, 250, 800, 350)     # Стол 800x350
+        # Состояние игры
+        self.state = "menu"
+        self.fullscreen = False
+        self.music_on = True  # По умолчанию музыка включена
 
-# Настройки кнопки
-button_pos = (400, 400)
-button_radius = 40
-button_pressed = False
+        # Загрузка и запуск музыки
+        self.destroyed_sound = pygame.mixer.Sound("static/destroyed_complex.mp3")
+        pygame.mixer.music.load("static/background_music_1.mp3")  # Укажи правильное расширение файла
+        pygame.mixer.music.set_volume(0.5)
+        if self.music_on:
+            pygame.mixer.music.play(-1)  # Запускаем музыку в бесконечном цикле
 
-# Настройки рычага
-switch_pos = (600, 400)
-switch_angle = 0
-switch_visible = False
-switch_animating = False
-switch_target_angle = 45
+        # Меню
+        self.menu_buttons = [
+            MenuButtonSprite((cfg.WIDTH // 2, 200), (200, 50)),
+            MenuButtonSprite((cfg.WIDTH // 2, 300), (200, 50)),
+            MenuButtonSprite((cfg.WIDTH // 2, 400), (200, 50)),
+            MenuButtonSprite((cfg.WIDTH // 2, 500), (200, 50)),
+        ]
+        self.menu_labels = [
+            self.large_font.render("Играть", True, cfg.WHITE),
+            self.large_font.render("Настройки", True, cfg.WHITE),
+            self.large_font.render("Об игре", True, cfg.WHITE),
+            self.large_font.render("Выход", True, cfg.WHITE),
+        ]
 
-# Состояние игры
-button_presses = 0
-monitor_clicks = 0
+        # Настройки
+        self.settings_buttons = [
+            MenuButtonSprite((cfg.WIDTH // 2, 200), (200, 50)),  # Музыка
+            MenuButtonSprite((cfg.WIDTH // 2, 300), (200, 50)),  # Полноэкранный режим
+            MenuButtonSprite((cfg.WIDTH // 2, 400), (200, 50)),  # Назад
+        ]
+        self.settings_labels = [
+            self.large_font.render(f"Музыка: {'Вкл' if self.music_on else 'Выкл'}", True, cfg.WHITE),
+            self.large_font.render(f"Полноэкранный: {'Вкл' if self.fullscreen else 'Выкл'}", True, cfg.WHITE),
+            self.large_font.render("Назад", True, cfg.WHITE),
+        ]
 
-# Шрифты
-regular_font = pygame.font.Font(None, 24)  # Обычный текст
-large_font = pygame.font.Font(None, 48)    # Крупные символы
+        # Об игре
+        self.about_text = [
+            self.regular_font.render("игра: Пожалуйста, ничего не трогайте | автор: Ic0n", True, cfg.WHITE),
+            self.regular_font.render("крайне короткая игра, с тремя концовками:", True, cfg.WHITE),
+            self.regular_font.render("Первая достигается просто, нужно нажать три раза на красню кнопку, для второй ", True, cfg.WHITE),
+            self.regular_font.render("нужно нажать сначало на кнопку, а потом на рычаг, который появится воле нее", True, cfg.WHITE),
+            self.regular_font.render("для третьей нужно разбить экран, нажав по нему три раза", True, cfg.WHITE),
+            self.regular_font.render("Нажмите Esc для возврата", True, cfg.WHITE),
+        ]
+        self.back_button = MenuButtonSprite((cfg.WIDTH // 2, 500), (200, 50))
+        self.back_label = self.large_font.render("Назад", True, cfg.WHITE)
 
-# Типы концовок
-ENDING_SMASHED_MONITOR = 1
-ENDING_BUTTON_THREE_TIMES = 2
-ENDING_BUTTON_AND_LEVER = 3
+        # Подтверждение выхода
+        self.confirm_buttons = [
+            MenuButtonSprite((cfg.WIDTH // 2 - 150, 400), (200, 50)),
+            MenuButtonSprite((cfg.WIDTH // 2 + 150, 400), (200, 50)),
+        ]
+        self.confirm_labels = [
+            self.large_font.render("Да", True, cfg.WHITE),
+            self.large_font.render("Нет", True, cfg.WHITE),
+        ]
+        self.confirm_text = self.large_font.render("Выйти? Прогресс будет потерян!", True, cfg.WHITE)
 
-# Функция отображения концовки
-def show_ending(ending_type):
-    if ending_type == ENDING_SMASHED_MONITOR:
-        screen.fill(BLACK)
-        triangle_text = large_font.render("Здесь будут сиволы/подсказки для следующей загадки + разбитый монитор", True, WHITE).convert_alpha()
-        text_rect = triangle_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-        for i in range(30):
-            alpha = int((i / 29) * 255)
-            triangle_text.set_alpha(alpha)
-            screen.blit(triangle_text, text_rect)
+    def run(self):
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    if self.state == "menu":
+                        pygame.quit()
+                        sys.exit()
+                    elif self.state == "game":
+                        self.state = "confirm_exit"
+                    elif self.state in ["settings", "about"]:
+                        self.state = "menu"
+
+                if self.state == "menu":
+                    for i, button in enumerate(self.menu_buttons):
+                        if button.interact(event):
+                            if i == 0:
+                                self.reset_game()
+                                self.state = "game"
+                            elif i == 1:
+                                self.state = "settings"
+                            elif i == 2:
+                                self.state = "about"
+                            elif i == 3:
+                                pygame.quit()
+                                sys.exit()
+
+                elif self.state == "settings":
+                    for i, button in enumerate(self.settings_buttons):
+                        if button.interact(event):
+                            if i == 0:  # Кнопка "Музыка"
+                                self.music_on = not self.music_on
+                                if self.music_on:
+                                    pygame.mixer.music.play(-1)  # Включаем музыку в цикле
+                                else:
+                                    pygame.mixer.music.stop()  # Выключаем музыку
+                                self.settings_labels[0] = self.large_font.render(
+                                    f"Музыка: {'Вкл' if self.music_on else 'Выкл'}", True, cfg.WHITE
+                                )
+                            elif i == 1:
+                                self.fullscreen = not self.fullscreen
+                                if self.fullscreen:
+                                    self.screen = pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT), pygame.FULLSCREEN)
+                                else:
+                                    self.screen = pygame.display.set_mode((cfg.WIDTH, cfg.HEIGHT))
+                                self.settings_labels[1] = self.large_font.render(
+                                    f"Полноэкранный: {'Вкл' if self.fullscreen else 'Выкл'}", True, cfg.WHITE
+                                )
+                            elif i == 2:
+                                self.state = "menu"
+
+                elif self.state == "about":
+                    if self.back_button.interact(event):
+                        self.state = "menu"
+
+                elif self.state == "confirm_exit":
+                    for i, button in enumerate(self.confirm_buttons):
+                        if button.interact(event):
+                            if i == 0:
+                                self.state = "menu"
+                                self.reset_game()
+                            elif i == 1:
+                                self.state = "game"
+
+                elif self.state == "game":
+                    for obj in self.interactive_objects:
+                        ending = obj.interact(event)
+                        if ending:
+                            if ending == cfg.ENDING_BUTTON_THREE_TIMES:
+                                self.monitor.display_mode = 'ending2'
+                                self.show_ending(ending)
+                            elif ending == cfg.ENDING_SMASHED_MONITOR:
+                                self.show_ending(ending)
+                            elif ending == cfg.ENDING_BUTTON_AND_LEVER:
+                                self.monitor.display_mode = 'ending3'
+                                self.show_ending(ending)
+
+            if self.state == "game":
+                for obj in self.interactive_objects:
+                    ending = obj.update()
+                    if ending:
+                        if ending == cfg.ENDING_BUTTON_AND_LEVER:
+                            self.monitor.display_mode = 'ending3'
+                            self.show_ending(ending)
+                if self.button.presses >= 1:
+                    self.lever.visible = True
+
+            self.draw()
             pygame.display.flip()
-            pygame.time.wait(100)
-    elif ending_type == ENDING_BUTTON_THREE_TIMES:
-        monitor_surface = pygame.Surface((MONITOR_RECT.width, MONITOR_RECT.height))
-        monitor_surface.fill(BLACK)
-        line1 = regular_font.render("ots: запуск_системы/завершить_игру", True, WHITE)
-        line2 = regular_font.render("ошибка: Игрок не достоин", True, WHITE)
-        monitor_surface.blit(line1, ((MONITOR_RECT.width - line1.get_width()) // 2, 50))
-        monitor_surface.blit(line2, ((MONITOR_RECT.width - line2.get_width()) // 2, 100))
-        screen.blit(monitor_surface, MONITOR_RECT.topleft)
-        pygame.display.flip()
-        pygame.time.wait(3000)
-    elif ending_type == ENDING_BUTTON_AND_LEVER:
-        monitor_surface = pygame.Surface((MONITOR_RECT.width, MONITOR_RECT.height))
-        monitor_surface.fill(BLACK)
-        win_text = large_font.render("ПОБЕДА", True, WHITE)
-        text_rect = win_text.get_rect(center=(MONITOR_RECT.width // 2, MONITOR_RECT.height // 2))
-        monitor_surface.blit(win_text, text_rect)
-        screen.blit(monitor_surface, MONITOR_RECT.topleft)
-        pygame.display.flip()
-        pygame.time.wait(3000)
-    pygame.quit()
-    sys.exit()
+            self.clock.tick(60)
 
-# Основной игровой цикл
-clock = pygame.time.Clock()
-while True:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    def draw(self):
+        self.screen.fill(cfg.BLACK)
+        if self.state == "menu":
+            for button, label in zip(self.menu_buttons, self.menu_labels):
+                button.draw(self.screen)
+                label_rect = label.get_rect(center=button.rect.center)
+                self.screen.blit(label, label_rect)
+        elif self.state == "settings":
+            for button, label in zip(self.settings_buttons, self.settings_labels):
+                button.draw(self.screen)
+                label_rect = label.get_rect(center=button.rect.center)
+                self.screen.blit(label, label_rect)
+        elif self.state == "about":
+            for i, line in enumerate(self.about_text):
+                line_rect = line.get_rect(center=(cfg.WIDTH // 2, 200 + i * 50))
+                self.screen.blit(line, line_rect)
+            self.back_button.draw(self.screen)
+            label_rect = self.back_label.get_rect(center=self.back_button.rect.center)
+            self.screen.blit(self.back_label, label_rect)
+        elif self.state == "confirm_exit":
+            text_rect = self.confirm_text.get_rect(center=(cfg.WIDTH // 2, 200))
+            self.screen.blit(self.confirm_text, text_rect)
+            for button, label in zip(self.confirm_buttons, self.confirm_labels):
+                button.draw(self.screen)
+                label_rect = label.get_rect(center=button.rect.center)
+                self.screen.blit(label, label_rect)
+        elif self.state == "game":
+            self.background.draw(self.screen)
+            for obj in self.interactive_objects:
+                obj.draw(self.screen)
+
+    def show_ending(self, ending_type):
+        if ending_type == cfg.ENDING_SMASHED_MONITOR:
+            self.screen.fill(cfg.BLACK)
+            triangle_text = self.large_font.render("⛛", True, cfg.WHITE).convert_alpha()
+            text_rect = triangle_text.get_rect(center=(cfg.WIDTH // 2, cfg.HEIGHT // 2))
+            pygame.mixer.music.stop()
+            self.destroyed_sound.play()
+            for i in range(40):
+                alpha = int((i / 29) * 255)
+                triangle_text.set_alpha(alpha)
+                self.screen.blit(triangle_text, text_rect)
+                pygame.display.flip()
+                pygame.time.wait(100)
             pygame.quit()
             sys.exit()
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = event.pos
-            if math.dist(mouse_pos, button_pos) <= button_radius:
-                button_presses += 1
-                button_pressed = True
-                if button_presses == 1:
-                    switch_visible = True
-                elif button_presses == 3:
-                    show_ending(ENDING_BUTTON_THREE_TIMES)
-            elif MONITOR_RECT.collidepoint(mouse_pos):
-                monitor_clicks += 1
-                if monitor_clicks == 3:
-                    show_ending(ENDING_SMASHED_MONITOR)
-            elif switch_visible and math.dist(mouse_pos, switch_pos) <= 50:
-                switch_animating = True
+        else:
+            start_time = pygame.time.get_ticks()
+            while pygame.time.get_ticks() - start_time < 3000:
+                self.draw()
+                pygame.display.flip()
+                self.clock.tick(60)
+            self.reset_game()
+            self.state = "menu"
 
-    if switch_animating and switch_angle < switch_target_angle:
-        switch_angle += 5
-        if switch_angle >= switch_target_angle:
-            show_ending(ENDING_BUTTON_AND_LEVER)
+    def reset_game(self):
+        self.button.presses = 0
+        self.lever.visible = False
+        self.lever.angle = 0
+        self.lever.animating = False
+        self.monitor.click_count = 0
+        self.monitor.display_mode = 'normal'
+        self.monitor.image.fill(cfg.BLACK)
+        self.monitor.image.blit(
+            pygame.Surface((self.monitor.rect.width, self.monitor.rect.height)),
+            (0, 0)
+        )
+        pygame.draw.rect(self.monitor.image, (100, 100, 100), (0, 0, self.monitor.rect.width, self.monitor.rect.height), 10)
 
-    # Отрисовка
-    screen.fill(BLACK)
-    pygame.draw.rect(screen, GRAY, MONITOR_RECT, 3)
-    pygame.draw.rect(screen, GRAY, TABLE_RECT, 3)
-
-    # Декоративные объекты на столе
-    pygame.draw.rect(screen, BROWN, (50, 500, 50, 50))  # Корзина
-    pygame.draw.rect(screen, BROWN, (100, 450, 30, 40)) # Папка 1
-    pygame.draw.rect(screen, BROWN, (140, 450, 30, 40)) # Папка 2
-    pygame.draw.rect(screen, BROWN, (700, 450, 60, 20)) # Книга 1
-    pygame.draw.rect(screen, BROWN, (700, 470, 60, 20)) # Книга 2
-
-    current_radius = button_radius * 0.9 if button_pressed else button_radius
-    pygame.draw.circle(screen, RED, button_pos, int(current_radius))
-    button_pressed = False
-
-    if switch_visible:
-        switch_surf = pygame.Surface((20, 60), pygame.SRCALPHA)
-        pygame.draw.rect(switch_surf, GREEN, (0, 20, 20, 40))
-        pygame.draw.rect(switch_surf, GREEN, (5, 0, 10, 20))
-        rotated_switch = pygame.transform.rotate(switch_surf, switch_angle)
-        switch_rect = rotated_switch.get_rect(center=switch_pos)
-        screen.blit(rotated_switch, switch_rect.topleft)
-
-    pygame.display.flip()
-    clock.tick(60)
+if __name__ == "__main__":
+    game = Game()
+    game.run()
