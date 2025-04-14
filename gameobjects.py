@@ -178,7 +178,7 @@ class MonitorSprite(pygame.sprite.Sprite):
 
 class Background:
     def __init__(self):
-        self.bookshelf_image = pygame.image.load("static/bookshelf-large.png").convert()
+        self.bookshelf_image = pygame.image.load(cfg.resource_path("static/bookshelf-large.png")).convert()
         self.bookshelf_image = pygame.transform.scale(self.bookshelf_image, (cfg.WIDTH, cfg.HEIGHT))
         self.table = self.create_table()
 

@@ -3,6 +3,7 @@ import sys
 import config as cfg
 from gameobjects import *
 
+
 class Game:
     def __init__(self):
         pygame.init()
@@ -26,8 +27,8 @@ class Game:
         self.music_on = True  # По умолчанию музыка включена
 
         # Загрузка и запуск музыки
-        self.destroyed_sound = pygame.mixer.Sound("static/destroyed_complex.mp3")
-        pygame.mixer.music.load("static/background_music_1.mp3")  # Укажи правильное расширение файла
+        self.destroyed_sound = pygame.mixer.Sound(cfg.resource_path("static/destroyed_complex.mp3"))
+        pygame.mixer.music.load(cfg.resource_path("static/background_music_1.mp3"))  # Укажи правильное расширение файла
         pygame.mixer.music.set_volume(0.5)
         if self.music_on:
             pygame.mixer.music.play(-1)  # Запускаем музыку в бесконечном цикле
@@ -63,9 +64,9 @@ class Game:
             self.regular_font.render("игра: Пожалуйста, ничего не трогайте | автор: Ic0n", True, cfg.WHITE),
             self.regular_font.render("крайне короткая игра, с тремя концовками:", True, cfg.WHITE),
             self.regular_font.render("Первая достигается просто, нужно нажать три раза на красню кнопку, для второй ", True, cfg.WHITE),
-            self.regular_font.render("нужно нажать сначало на кнопку, а потом на рычаг, который появится воле нее", True, cfg.WHITE),
-            self.regular_font.render("для третьей нужно разбить экран, нажав по нему три раза", True, cfg.WHITE),
-            self.regular_font.render("Нажмите Esc для возврата", True, cfg.WHITE),
+            self.regular_font.render("нужно нажать сначало на кнопку, а потом на рычаг, который появится возле нее", True, cfg.WHITE),
+            self.regular_font.render("для третьей нужно разбить экран, нажав по нему три раза, после чего игра закроется", True, cfg.WHITE),
+            self.regular_font.render("Спасибо за игру, для возврата можно пользоваться Esc", True, cfg.WHITE),
         ]
         self.back_button = MenuButtonSprite((cfg.WIDTH // 2, 500), (200, 50))
         self.back_label = self.large_font.render("Назад", True, cfg.WHITE)
